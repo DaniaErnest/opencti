@@ -1,0 +1,171 @@
+---
+# Source: opencti/templates/server/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: release-name-opencti-server
+  labels:
+    app.kubernetes.io/instance: release-name
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: opencti
+    app.kubernetes.io/version: 6.2.18
+    helm.sh/chart: opencti-1.6.0
+    opencti.component: server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: release-name
+      app.kubernetes.io/name: opencti
+      opencti.component: server
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/instance: release-name
+        app.kubernetes.io/name: opencti
+        opencti.component: server
+    spec:
+      serviceAccountName: release-name-opencti
+      securityContext:
+        {}
+      initContainers:
+      - name: ready-checker-elasticsearch
+        image: busybox
+        command:
+          - 'sh'
+          - '-c'
+          - |
+            RETRY=0;
+            until [ $RETRY -eq 30 ];
+            do
+              nc -zv release-name-elasticsearch 9200 && break;
+              echo "[$RETRY/30] waiting service release-name-elasticsearch:9200 is ready";
+              sleep 5;
+              RETRY=$(($RETRY + 1));
+            done
+      - name: ready-checker-minio
+        image: busybox
+        command:
+          - 'sh'
+          - '-c'
+          - |
+            RETRY=0;
+            until [ $RETRY -eq 30 ];
+            do
+              nc -zv release-name-minio 9000 && break;
+              echo "[$RETRY/30] waiting service release-name-minio:9000 is ready";
+              sleep 5;
+              RETRY=$(($RETRY + 1));
+            done
+      - name: ready-checker-rabbitmq
+        image: busybox
+        command:
+          - 'sh'
+          - '-c'
+          - |
+            RETRY=0;
+            until [ $RETRY -eq 30 ];
+            do
+              nc -zv release-name-rabbitmq 5672 && break;
+              echo "[$RETRY/30] waiting service release-name-rabbitmq:5672 is ready";
+              sleep 5;
+              RETRY=$(($RETRY + 1));
+            done
+      - name: ready-checker-redis-master
+        image: busybox
+        command:
+          - 'sh'
+          - '-c'
+          - |
+            RETRY=0;
+            until [ $RETRY -eq 30 ];
+            do
+              nc -zv release-name-redis-master 6379 && break;
+              echo "[$RETRY/30] waiting service release-name-redis-master:6379 is ready";
+              sleep 5;
+              RETRY=$(($RETRY + 1));
+            done
+      containers:
+        - name: opencti-server
+          securityContext:
+            {}
+          image: "opencti/platform:6.2.18"
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 4000
+              protocol: TCP
+          lifecycle:
+          livenessProbe:
+            httpGet:
+              path: "/health?health_access_key=ChangeMe"
+              port: 4000
+            failureThreshold: 3
+            initialDelaySeconds: 180
+            periodSeconds: 10
+            successThreshold: 1
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: "/health?health_access_key=ChangeMe"
+              port: 4000
+            failureThreshold: 3
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            successThreshold: 1
+            timeoutSeconds: 1
+          startupProbe:
+            httpGet:
+              path: "/health?health_access_key=ChangeMe"
+              port: 4000
+            failureThreshold: 30
+            initialDelaySeconds: 180
+            periodSeconds: 10
+            successThreshold: 1
+            timeoutSeconds: 5
+          env:
+          - name: NODE_OPTIONS
+            value: --max-old-space-size=8096
+          - name: PROVIDERS__LOCAL__STRATEGY
+            value: LocalStrategy
+          # Variables from secrets have precedence
+          # Add variables in plain text if they were not already added from secrets
+          - name: APP__ADMIN__EMAIL
+            value: "admin@opencti.io"
+          - name: APP__ADMIN__PASSWORD
+            value: "ChangeMe"
+          - name: APP__ADMIN__TOKEN
+            value: "ChangeMe"
+          - name: APP__BASE_PATH
+            value: "/"
+          - name: APP__GRAPHQL__PLAYGROUND__ENABLED
+            value: "false"
+          - name: APP__GRAPHQL__PLAYGROUND__FORCE_DISABLED_INTROSPECTION
+            value: "false"
+          - name: APP__HEALTH_ACCESS_KEY
+            value: "ChangeMe"
+          - name: APP__TELEMETRY__METRICS__ENABLED
+            value: "true"
+          - name: ELASTICSEARCH__URL
+            value: "http://release-name-elasticsearch:9200"
+          - name: MINIO__ENDPOINT
+            value: "release-name-minio:9000"
+          - name: RABBITMQ__HOSTNAME
+            value: "release-name-rabbitmq"
+          - name: RABBITMQ__PASSWORD
+            value: "ChangeMe"
+          - name: RABBITMQ__PORT
+            value: "5672"
+          - name: RABBITMQ__PORT_MANAGEMENT
+            value: "15672"
+          - name: RABBITMQ__USERNAME
+            value: "user"
+          - name: REDIS__HOSTNAME
+            value: "release-name-redis-master"
+          - name: REDIS__MODE
+            value: "single"
+          - name: REDIS__PORT
+            value: "6379"
+          resources:
+            {}
+      terminationGracePeriodSeconds: 30

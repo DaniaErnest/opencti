@@ -1,0 +1,24 @@
+---
+# Source: opencti/templates/worker/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: release-name-opencti-worker
+  labels:
+    app.kubernetes.io/instance: release-name
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: opencti
+    app.kubernetes.io/version: 6.2.18
+    helm.sh/chart: opencti-1.6.0
+    opencti.component: worker
+spec:
+  type: ClusterIP
+  ports:
+    - name: metrics
+      port: 14269
+      targetPort: 14269
+      protocol: TCP
+  selector:
+    app.kubernetes.io/instance: release-name
+    app.kubernetes.io/name: opencti
+    opencti.component: worker

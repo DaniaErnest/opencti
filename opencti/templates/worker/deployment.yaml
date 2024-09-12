@@ -1,0 +1,72 @@
+---
+# Source: opencti/templates/worker/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: release-name-opencti-worker
+  labels:
+    app.kubernetes.io/instance: release-name
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: opencti
+    app.kubernetes.io/version: 6.2.18
+    helm.sh/chart: opencti-1.6.0
+    opencti.component: worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: release-name
+      app.kubernetes.io/name: opencti
+      opencti.component: worker
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/instance: release-name
+        app.kubernetes.io/name: opencti
+        opencti.component: worker
+    spec:
+      serviceAccountName: release-name-opencti
+      securityContext:
+        null
+      initContainers:
+      - name: ready-checker-server
+        image: busybox
+        command:
+          - 'sh'
+          - '-c'
+          - >
+            RETRY=0;
+            until [ $RETRY -eq 30 ];
+            do
+              nc -zv release-name-opencti-server 80 && break;
+              echo "[$RETRY/30] waiting service release-name-opencti-server:80 is ready";
+              sleep 5;
+              RETRY=$(($RETRY + 1));
+            done
+      containers:
+        - name: opencti-worker
+          securityContext:
+            null
+          image: "opencti/worker:6.2.18"
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: metrics
+              containerPort: 14269
+              protocol: TCP
+          lifecycle:
+          env:
+          # Variables from secrets have precedence
+          # Add variables in plain text from .Values.worker.env if they were not already added from secrets
+          - name: WORKER_LOG_LEVEL
+            value: "info"
+          - name: WORKER_TELEMETRY_ENABLED
+            value: "true"
+          # Special handling for OPENCTI_URL which is constructed from other values
+          - name: OPENCTI_URL
+            value: "http://release-name-opencti-server:80"
+          # Special handling for OPENCTI_TOKEN which is constructed from other values
+          - name: OPENCTI_TOKEN
+            value: ChangeMe
+          resources:
+            {}
+      terminationGracePeriodSeconds: 30
